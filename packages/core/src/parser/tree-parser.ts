@@ -10,6 +10,7 @@ import type { Mappings } from '../schema/mappings.js';
 import { readYamlFile } from './yaml-parser.js';
 import { readMarkdownFile } from './markdown-parser.js';
 import { toLogicalFeaturePath } from '../utils/path.js';
+import { parsePlanTasks } from './plan-task-parser.js';
 
 export class TreeParser {
   private arborRoot: string;
@@ -297,12 +298,26 @@ export class TreeParser {
       const filePath = path.join(dir, entry.name);
       const content = await fs.readFile(filePath, 'utf-8');
 
+      // Parse tasks from plan content
+      const parseResult = parsePlanTasks(content);
+
       plans.push({
         id: path.basename(entry.name, '.md'),
         name: path.basename(entry.name, '.md'),
         path: filePath,
         content,
         linked_at: new Date().toISOString(),
+        parsedTasks: parseResult.tasks.map((t) => ({
+          name: t.name,
+          status: t.status,
+          section: t.section,
+        })),
+        taskStats: {
+          total: parseResult.tasks.length,
+          completed: parseResult.completedCheckboxes,
+          pending:
+            parseResult.tasks.length - parseResult.completedCheckboxes,
+        },
       });
     }
 

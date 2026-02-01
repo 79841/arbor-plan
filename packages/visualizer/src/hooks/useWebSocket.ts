@@ -1,17 +1,26 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { TreeData, TreeNode } from '@arbor-plan/core';
+import type { TreeData, TreeNode, Plan } from '@arbor-plan/core';
+
+// Partial plan info for WebSocket updates
+type PartialPlan = Pick<Plan, 'id' | 'name' | 'path'>;
 
 // Helper function to add a plan to a specific node in the tree
 function addPlanToNode(
   node: TreeNode,
   targetPath: string,
-  plan: { id: string; name: string; path: string }
+  plan: PartialPlan
 ): TreeNode {
   // Check if this node matches the target path
   if (node.path === targetPath) {
+    // Create a minimal Plan object with required fields
+    const fullPlan: Plan = {
+      ...plan,
+      content: '',
+      linked_at: new Date().toISOString(),
+    };
     return {
       ...node,
-      plans: [...(node.plans || []), plan],
+      plans: [...(node.plans || []), fullPlan],
     };
   }
 

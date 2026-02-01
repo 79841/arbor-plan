@@ -3,12 +3,28 @@ import type { Bug } from '../schema/bug.js';
 import type { Doc } from '../schema/doc.js';
 import type { NodeType, NodeStatus } from '../schema/meta.js';
 
+export interface ParsedPlanTaskInfo {
+  name: string;
+  status: 'pending' | 'completed';
+  section?: string;
+}
+
+export interface PlanTaskStats {
+  total: number;
+  completed: number;
+  pending: number;
+}
+
 export interface Plan {
   id: string;
   name: string;
   path: string;
   content: string;
   linked_at: string;
+  /** Plan에서 파싱된 Task 목록 */
+  parsedTasks?: ParsedPlanTaskInfo[];
+  /** Task 통계 */
+  taskStats?: PlanTaskStats;
 }
 
 export interface TreeNode {

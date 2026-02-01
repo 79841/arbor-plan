@@ -5,6 +5,7 @@ import {
   getDateString,
   toArborPath,
   writeMarkdownFile,
+  parsePlanTasks,
   type TaskStatus,
   type TargetType,
 } from '@arbor-plan/core';
@@ -84,4 +85,101 @@ export async function createTask(
       created: today,
     },
   };
+}
+
+/**
+ * Plan에서 Task를 일괄 생성하기 위한 입력
+ */
+export interface CreateTasksFromPlanInput {
+  parentType: TargetType;
+  parentPath: string;
+  planId: string;
+  tasks: Array<{
+    name: string;
+    status: 'pending' | 'completed';
+    section?: string;
+  }>;
+}
+
+/**
+ * Plan에서 Task 일괄 생성 결과
+ */
+export interface CreateTasksFromPlanResult {
+  success: boolean;
+  created: number;
+  tasks: Array<{
+    id: string;
+    name: string;
+    status: TaskStatus;
+  }>;
+  error?: { code: string; message: string };
+}
+
+/**
+ * Plan에서 파싱된 Task들을 일괄 생성합니다.
+ */
+export async function createTasksFromPlan(
+  arborRoot: string,
+  input: CreateTasksFromPlanInput
+): Promise<CreateTasksFromPlanResult> {
+  const results: CreateTasksFromPlanResult['tasks'] = [];
+
+  for (const taskInput of input.tasks) {
+    const result = await createTask(arborRoot, {
+      parentType: input.parentType,
+      parentPath: input.parentPath,
+      name: taskInput.name,
+      status: taskInput.status as TaskStatus,
+      planRef: input.planId,
+      description: taskInput.section
+        ? `Section: ${taskInput.section}`
+        : undefined,
+    });
+
+    if (result.success) {
+      results.push({
+        id: result.task.id,
+        name: result.task.name,
+        status: result.task.status,
+      });
+    }
+  }
+
+  return {
+    success: true,
+    created: results.length,
+    tasks: results,
+  };
+}
+
+/**
+ * Plan 내용에서 Task를 파싱하여 자동 생성합니다.
+ */
+export async function extractAndCreateTasksFromPlanContent(
+  arborRoot: string,
+  parentType: TargetType,
+  parentPath: string,
+  planId: string,
+  planContent: string
+): Promise<CreateTasksFromPlanResult> {
+  const parseResult = parsePlanTasks(planContent);
+
+  if (parseResult.tasks.length === 0) {
+    return {
+      success: true,
+      created: 0,
+      tasks: [],
+    };
+  }
+
+  return createTasksFromPlan(arborRoot, {
+    parentType,
+    parentPath,
+    planId,
+    tasks: parseResult.tasks.map((t) => ({
+      name: t.name,
+      status: t.status,
+      section: t.section,
+    })),
+  });
 }

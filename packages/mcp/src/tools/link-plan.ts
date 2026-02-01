@@ -10,7 +10,9 @@ import {
   type Mappings,
   type LinkedPlan,
   type TargetType,
+  type TaskStatus,
 } from '@arbor-plan/core';
+import { extractAndCreateTasksFromPlanContent } from './create-task.js';
 
 export interface ListUnlinkedResult {
   unlinked: Array<{
@@ -45,6 +47,8 @@ export interface LinkPlanInput {
   targetType: TargetType;
   targetPath: string;
   name?: string;
+  /** Plan에서 Task 자동 추출 여부 (기본값: true) */
+  autoExtractTasks?: boolean;
 }
 
 export interface LinkPlanResult {
@@ -54,6 +58,11 @@ export interface LinkPlanResult {
     source: string;
     local: string;
     name: string;
+  };
+  /** Task 자동 추출 결과 */
+  extractedTasks?: {
+    created: number;
+    tasks: Array<{ id: string; name: string; status: TaskStatus }>;
   };
   error?: { code: string; message: string };
 }
@@ -171,6 +180,34 @@ export async function linkPlan(
   mappings.linked.push(linkedPlan);
   mappings.unlinked.splice(unlinkedIndex, 1);
   await writeYamlFile(mappingsPath, mappings);
+
+  // Task 자동 추출 (기본값: true)
+  if (input.autoExtractTasks !== false) {
+    const planContent = await fs.readFile(destPath, 'utf-8');
+    const tasksResult = await extractAndCreateTasksFromPlanContent(
+      arborRoot,
+      input.targetType,
+      input.targetPath,
+      linkedPlan.id,
+      planContent
+    );
+
+    if (tasksResult.created > 0) {
+      return {
+        success: true,
+        linkedPlan: {
+          id: linkedPlan.id,
+          source: linkedPlan.source,
+          local: linkedPlan.local,
+          name: linkedPlan.name,
+        },
+        extractedTasks: {
+          created: tasksResult.created,
+          tasks: tasksResult.tasks,
+        },
+      };
+    }
+  }
 
   return {
     success: true,

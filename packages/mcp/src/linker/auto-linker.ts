@@ -11,15 +11,17 @@ import {
   type PendingItem,
   type Mappings,
   type LinkedPlan,
+  type TargetType,
 } from '@arbor-plan/core';
 import { ClaudePlansWatcher } from '../watcher/claude-plans-watcher.js';
+import { extractAndCreateTasksFromPlanContent } from '../tools/create-task.js';
 
 export interface AutoLinkerConfig {
   arborRoot: string;
   claudePlansPath?: string;
 }
 
-export type AutoLinkerEvent = 'plan-linked' | 'plan-unlinked' | 'scan-complete' | 'source-updated' | 'error';
+export type AutoLinkerEvent = 'plan-linked' | 'plan-unlinked' | 'scan-complete' | 'source-updated' | 'tasks-extracted' | 'error';
 
 export interface AutoLinkerEventData {
   source: string;
@@ -29,6 +31,7 @@ export interface AutoLinkerEventData {
   newUnlinked?: number;
   sourceUpdated?: number;
   total?: number;
+  tasksCount?: number;
 }
 
 export class AutoLinker {
@@ -211,6 +214,32 @@ export class AutoLinker {
       dest: destPath,
       plan: linkedPlan,
     });
+
+    // Task 자동 추출
+    try {
+      const planContent = await fs.readFile(destPath, 'utf-8');
+      const tasksResult = await extractAndCreateTasksFromPlanContent(
+        arborRoot,
+        context.targetType as TargetType,
+        context.targetPath,
+        linkedPlan.id,
+        planContent
+      );
+
+      if (tasksResult.created > 0) {
+        this.onUpdate?.('tasks-extracted', {
+          source: sourcePath,
+          plan: linkedPlan,
+          tasksCount: tasksResult.created,
+        });
+      }
+    } catch (error) {
+      // Task 추출 실패는 에러로 처리하지 않고 로그만 남김
+      this.onUpdate?.('error', {
+        source: sourcePath,
+        error: new Error(`Task extraction failed: ${error instanceof Error ? error.message : String(error)}`),
+      });
+    }
   }
 
   private buildDestDir(targetType: string, targetPath: string): string {

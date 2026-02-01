@@ -11,13 +11,17 @@ import {
   type Mappings,
   type LinkedPlan,
   type TargetType,
+  type TaskStatus,
 } from '@arbor-plan/core';
+import { extractAndCreateTasksFromPlanContent } from './create-task.js';
 
 export interface CreatePlanInput {
   parentType: TargetType;
   parentPath: string;
   name: string;
   content: string;
+  /** Plan에서 Task 자동 추출 여부 (기본값: true) */
+  autoExtractTasks?: boolean;
 }
 
 export interface CreatePlanResult {
@@ -28,6 +32,11 @@ export interface CreatePlanResult {
     name: string;
     local: string;
     linked_at: string;
+  };
+  /** Task 자동 추출 결과 */
+  extractedTasks?: {
+    created: number;
+    tasks: Array<{ id: string; name: string; status: TaskStatus }>;
   };
   error?: { code: string; message: string };
 }
@@ -110,7 +119,35 @@ export async function createPlan(
   mappings.linked.push(linkedPlan);
   await writeYamlFile(mappingsPath, mappings);
 
-  // 8. Return result
+  // 8. Task 자동 추출 (기본값: true)
+  if (input.autoExtractTasks !== false) {
+    const tasksResult = await extractAndCreateTasksFromPlanContent(
+      arborRoot,
+      input.parentType,
+      input.parentPath,
+      id,
+      input.content
+    );
+
+    if (tasksResult.created > 0) {
+      return {
+        success: true,
+        path: path.relative(arborRoot, planPath),
+        plan: {
+          id,
+          name: input.name,
+          local: path.relative(arborRoot, planPath),
+          linked_at: linkedAt,
+        },
+        extractedTasks: {
+          created: tasksResult.created,
+          tasks: tasksResult.tasks,
+        },
+      };
+    }
+  }
+
+  // 9. Return result
   return {
     success: true,
     path: path.relative(arborRoot, planPath),
