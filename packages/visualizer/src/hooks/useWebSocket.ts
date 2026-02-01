@@ -1,10 +1,54 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { TreeData } from '@arbor-plan/core';
+import type { TreeData, TreeNode } from '@arbor-plan/core';
 
-interface WebSocketMessage {
-  type: 'tree-update' | 'plan-linked' | 'plan-unlinked' | 'node-changed';
+// Helper function to add a plan to a specific node in the tree
+function addPlanToNode(
+  node: TreeNode,
+  targetPath: string,
+  plan: { id: string; name: string; path: string }
+): TreeNode {
+  // Check if this node matches the target path
+  if (node.path === targetPath) {
+    return {
+      ...node,
+      plans: [...(node.plans || []), plan],
+    };
+  }
+
+  // Recursively search in children
+  if (node.children) {
+    const newChildren = node.children.map((child) =>
+      addPlanToNode(child, targetPath, plan)
+    );
+    // Only return new object if children actually changed
+    if (newChildren.some((child, i) => child !== node.children![i])) {
+      return { ...node, children: newChildren };
+    }
+  }
+
+  return node;
+}
+
+interface TreeUpdateMessage {
+  type: 'tree-update';
   data: TreeData;
 }
+
+interface PlanLinkedMessage {
+  type: 'plan-linked';
+  data: {
+    planId: string;
+    targetPath: string;
+    linkedPlan?: { id: string; source: string; local: string; name: string };
+  };
+}
+
+interface GenericMessage {
+  type: 'plan-unlinked' | 'node-changed';
+  data: TreeData;
+}
+
+type WebSocketMessage = TreeUpdateMessage | PlanLinkedMessage | GenericMessage;
 
 export function useWebSocket(url: string) {
   const [treeData, setTreeData] = useState<TreeData | null>(null);
@@ -39,6 +83,54 @@ export function useWebSocket(url: string) {
             setTreeData(message.data);
             break;
           case 'plan-linked':
+            // Optimized update: remove from unlinked and add to tree
+            setTreeData((prevData) => {
+              if (!prevData) return prevData;
+
+              const { planId, targetPath, linkedPlan } = message.data;
+
+              // Remove from unlinked list
+              const newUnlinked = prevData.mappings.unlinked.filter(
+                (p) => p.id !== planId
+              );
+
+              // Add to linked list if linkedPlan data is provided
+              const newLinked = linkedPlan
+                ? [
+                    ...prevData.mappings.linked,
+                    {
+                      id: linkedPlan.id,
+                      source: linkedPlan.source,
+                      local: linkedPlan.local,
+                      name: linkedPlan.name,
+                      target_type: '',
+                      target_path: targetPath,
+                      linked_at: new Date().toISOString(),
+                      source_exists: true,
+                    },
+                  ]
+                : prevData.mappings.linked;
+
+              // Add plan to the target node in the tree
+              const newRoot = linkedPlan
+                ? addPlanToNode(prevData.root, targetPath, {
+                    id: linkedPlan.id,
+                    name: linkedPlan.name,
+                    path: linkedPlan.local,
+                  })
+                : prevData.root;
+
+              return {
+                ...prevData,
+                root: newRoot,
+                mappings: {
+                  ...prevData.mappings,
+                  unlinked: newUnlinked,
+                  linked: newLinked,
+                },
+              };
+            });
+            break;
           case 'plan-unlinked':
           case 'node-changed':
             websocket.send(JSON.stringify({ type: 'get-tree' }));
