@@ -16,6 +16,7 @@ import {
   createTest,
   createSecurity,
   createPerformance,
+  createPlan,
   createTask,
   createBug,
   createDoc,
@@ -49,8 +50,14 @@ export async function createMcpServer() {
   let autoLinker: AutoLinker | null = null;
   if (await fs.pathExists(arborRoot)) {
     autoLinker = new AutoLinker({ arborRoot });
-    autoLinker.start((event, data) => {
-      console.error(`[Arbor] ${event}:`, data);
+    await autoLinker.start((event, data) => {
+      if (event === 'scan-complete') {
+        console.error(`[Arbor] Initial scan: ${data.total} files, ${data.newUnlinked} new unlinked, ${data.sourceUpdated} source updated`);
+      } else if (event === 'source-updated') {
+        console.error(`[Arbor] Source status updated: ${data.source} (exists: ${data.plan?.source_exists})`);
+      } else {
+        console.error(`[Arbor] ${event}:`, data);
+      }
     });
   }
 
@@ -190,6 +197,33 @@ export async function createMcpServer() {
               description: { type: 'string' },
             },
             required: ['featurePath', 'name'],
+          },
+        },
+        {
+          name: 'arbor_create_plan',
+          description: 'Plan 직접 생성 (순수 마크다운 형식)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              parentType: {
+                type: 'string',
+                enum: ['feature', 'config', 'infra', 'refactor', 'test', 'security', 'performance'],
+                description: '부모 노드 타입',
+              },
+              parentPath: {
+                type: 'string',
+                description: '부모 노드 경로 (예: auth/social-login)',
+              },
+              name: {
+                type: 'string',
+                description: 'Plan 이름',
+              },
+              content: {
+                type: 'string',
+                description: '순수 마크다운 내용',
+              },
+            },
+            required: ['parentType', 'parentPath', 'name', 'content'],
           },
         },
         {
@@ -355,8 +389,12 @@ export async function createMcpServer() {
           const result = await init(cwd, args as any);
           if (result.success && !autoLinker) {
             autoLinker = new AutoLinker({ arborRoot: result.path });
-            autoLinker.start((event, data) => {
-              console.error(`[Arbor] ${event}:`, data);
+            await autoLinker.start((event, data) => {
+              if (event === 'scan-complete') {
+                console.error(`[Arbor] Initial scan: ${data.total} files, ${data.newUnlinked} new unlinked, ${data.sourceUpdated} source updated`);
+              } else {
+                console.error(`[Arbor] ${event}:`, data);
+              }
             });
           }
           return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
@@ -394,6 +432,11 @@ export async function createMcpServer() {
 
         case 'arbor_create_performance': {
           const result = await createPerformance(arborRoot, args as any);
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+
+        case 'arbor_create_plan': {
+          const result = await createPlan(arborRoot, args as any);
           return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
 
