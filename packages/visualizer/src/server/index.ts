@@ -13,7 +13,9 @@ import {
   readYamlFile,
   writeYamlFile,
   type Mappings,
+  type Connections,
 } from '@arbor-plan/core';
+import { nanoid } from 'nanoid';
 import { linkPlan } from '@arbor-plan/mcp';
 import chokidar from 'chokidar';
 
@@ -106,6 +108,117 @@ export function createVisualizerServer(config: ServerConfig) {
       res.status(500).json({
         success: false,
         error: { code: 'INTERNAL_ERROR', message: 'Failed to link plan' },
+      });
+    }
+  });
+
+  // Connect nodes API (for edit mode containment relationships)
+  app.post('/api/connect-nodes', async (req, res) => {
+    try {
+      const { sourceId, sourcePath, targetId, targetPath } = req.body;
+
+      if (!sourceId || !sourcePath || !targetId || !targetPath) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: 'Missing required fields' },
+        });
+      }
+
+      const connectionsPath = path.join(config.arborRoot, 'connections.yaml');
+
+      // Read or create connections file
+      let connections: Connections;
+      if (existsSync(connectionsPath)) {
+        connections = await readYamlFile<Connections>(connectionsPath);
+      } else {
+        connections = { version: 1, connections: [] };
+      }
+
+      // Check if connection already exists
+      const exists = connections.connections.some(
+        (c) => c.source_id === sourceId && c.target_id === targetId
+      );
+
+      if (exists) {
+        return res.json({
+          success: true,
+          message: 'Connection already exists',
+        });
+      }
+
+      // Add new connection
+      connections.connections.push({
+        id: nanoid(),
+        source_id: sourceId,
+        source_path: sourcePath,
+        target_id: targetId,
+        target_path: targetPath,
+        created_at: getDateTimeString(),
+      });
+
+      await writeYamlFile(connectionsPath, connections);
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to connect nodes:', error);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to connect nodes' },
+      });
+    }
+  });
+
+  // Disconnect nodes API
+  app.delete('/api/connect-nodes', async (req, res) => {
+    try {
+      const { connectionId } = req.body;
+
+      if (!connectionId) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: 'Missing connectionId' },
+        });
+      }
+
+      const connectionsPath = path.join(config.arborRoot, 'connections.yaml');
+
+      if (!existsSync(connectionsPath)) {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'No connections file found' },
+        });
+      }
+
+      const connections = await readYamlFile<Connections>(connectionsPath);
+      connections.connections = connections.connections.filter((c) => c.id !== connectionId);
+      await writeYamlFile(connectionsPath, connections);
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to disconnect nodes:', error);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to disconnect nodes' },
+      });
+    }
+  });
+
+  // Get connections API
+  app.get('/api/connections', async (_req, res) => {
+    try {
+      const connectionsPath = path.join(config.arborRoot, 'connections.yaml');
+
+      if (!existsSync(connectionsPath)) {
+        return res.json({ connections: [] });
+      }
+
+      const connections = await readYamlFile<Connections>(connectionsPath);
+      res.json(connections);
+    } catch (error) {
+      console.error('Failed to get connections:', error);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to get connections' },
       });
     }
   });

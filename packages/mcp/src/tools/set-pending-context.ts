@@ -6,6 +6,7 @@ import {
   getExpirationTime,
   readYamlFile,
   writeYamlFile,
+  toPhysicalFeaturePath,
   type PendingContext,
   type PendingItem,
   type TargetType,
@@ -36,9 +37,11 @@ export async function setPendingContext(
   // Verify target exists
   let targetDir: string;
   switch (input.targetType) {
-    case 'feature':
-      targetDir = path.join(arborRoot, 'features', input.targetPath);
+    case 'feature': {
+      const physicalPath = toPhysicalFeaturePath(input.targetPath);
+      targetDir = path.join(arborRoot, 'features', physicalPath);
       break;
+    }
     case 'config':
       targetDir = path.join(arborRoot, 'config', input.targetPath);
       break;
@@ -48,9 +51,11 @@ export async function setPendingContext(
     case 'refactor':
     case 'test':
     case 'security':
-    case 'performance':
-      targetDir = path.join(arborRoot, 'features', input.targetPath, input.targetType);
+    case 'performance': {
+      const physicalPath = toPhysicalFeaturePath(input.targetPath);
+      targetDir = path.join(arborRoot, 'features', physicalPath, input.targetType);
       break;
+    }
     default:
       return {
         success: false,

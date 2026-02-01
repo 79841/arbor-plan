@@ -4,6 +4,7 @@ import {
   slugify,
   getDateString,
   writeYamlFile,
+  toPhysicalFeaturePath,
   type Meta,
   type NodeStatus,
 } from '@arbor-plan/core';
@@ -26,7 +27,9 @@ export async function createFeature(
   arborRoot: string,
   input: CreateFeatureInput
 ): Promise<CreateFeatureResult> {
-  const featurePath = path.join(arborRoot, 'features', input.path);
+  // Convert logical path to physical path
+  const physicalPath = toPhysicalFeaturePath(input.path);
+  const featurePath = path.join(arborRoot, 'features', physicalPath);
   const today = getDateString();
   const id = slugify(input.path.split('/').pop() || input.path);
 
@@ -43,10 +46,19 @@ export async function createFeature(
     };
   }
 
-  // Create parent directories if needed
-  const parentPath = path.dirname(featurePath);
-  if (parentPath !== path.join(arborRoot, 'features')) {
-    const parentMeta = path.join(parentPath, '_meta.yaml');
+  // Check parent exists if this is a nested feature
+  const pathSegments = input.path.split('/').filter(Boolean);
+  if (pathSegments.length > 1) {
+    // Get parent logical path (e.g., "auth" from "auth/social-login")
+    const parentLogicalPath = pathSegments.slice(0, -1).join('/');
+    const parentPhysicalPath = toPhysicalFeaturePath(parentLogicalPath);
+    const parentMeta = path.join(
+      arborRoot,
+      'features',
+      parentPhysicalPath,
+      '_meta.yaml'
+    );
+
     if (!(await fs.pathExists(parentMeta))) {
       return {
         success: false,
@@ -82,7 +94,7 @@ export async function createFeature(
 
   return {
     success: true,
-    path: `features/${input.path}`,
+    path: `features/${input.path}`, // Return logical path
     meta,
   };
 }

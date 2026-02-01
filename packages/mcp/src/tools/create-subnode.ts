@@ -4,6 +4,7 @@ import {
   slugify,
   getDateString,
   writeYamlFile,
+  toPhysicalFeaturePath,
   type Meta,
   type NodeType,
 } from '@arbor-plan/core';
@@ -26,7 +27,9 @@ async function createSubnode(
   nodeType: NodeType,
   input: CreateSubnodeInput
 ): Promise<CreateSubnodeResult> {
-  const parentPath = path.join(arborRoot, 'features', input.featurePath);
+  // Convert logical path to physical path
+  const physicalPath = toPhysicalFeaturePath(input.featurePath);
+  const parentPath = path.join(arborRoot, 'features', physicalPath);
   const subnodePath = path.join(parentPath, nodeType);
   const today = getDateString();
   const id = slugify(input.name);
@@ -77,7 +80,7 @@ async function createSubnode(
 
   return {
     success: true,
-    path: `features/${input.featurePath}/${nodeType}`,
+    path: `features/${input.featurePath}/${nodeType}`, // Return logical path
     meta,
   };
 }

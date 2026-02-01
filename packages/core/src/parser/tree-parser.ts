@@ -9,6 +9,7 @@ import type { Manifest } from '../schema/manifest.js';
 import type { Mappings } from '../schema/mappings.js';
 import { readYamlFile } from './yaml-parser.js';
 import { readMarkdownFile } from './markdown-parser.js';
+import { toLogicalFeaturePath } from '../utils/path.js';
 
 export class TreeParser {
   private arborRoot: string;
@@ -154,15 +155,19 @@ export class TreeParser {
 
   private async parseChildFeatures(parentDir: string): Promise<TreeNode[]> {
     const children: TreeNode[] = [];
-    const entries = await fs.readdir(parentDir, { withFileTypes: true });
+
+    // Look for features/ subdirectory (new structure)
+    const featuresDir = path.join(parentDir, 'features');
+    if (!(await this.exists(featuresDir))) {
+      return children;
+    }
+
+    const entries = await fs.readdir(featuresDir, { withFileTypes: true });
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      if (['plans', 'tasks', 'bugs', 'docs', 'refactor', 'test', 'security', 'performance'].includes(entry.name)) {
-        continue;
-      }
 
-      const childPath = path.join(parentDir, entry.name);
+      const childPath = path.join(featuresDir, entry.name);
       const metaPath = path.join(childPath, '_meta.yaml');
 
       if (!(await this.exists(metaPath))) continue;
@@ -178,16 +183,19 @@ export class TreeParser {
   }
 
   private async parseFeatureNode(nodePath: string, meta: Meta): Promise<TreeNode> {
-    const relativePath = path.relative(
+    // Calculate physical relative path from features/ root
+    const physicalRelativePath = path.relative(
       path.join(this.arborRoot, 'features'),
       nodePath
     );
+    // Convert physical path to logical path (remove 'features' segments)
+    const logicalPath = toLogicalFeaturePath(physicalRelativePath);
 
     const node: TreeNode = {
       type: meta.type,
       id: meta.id,
       name: meta.name,
-      path: relativePath,
+      path: logicalPath,
       status: meta.status,
       children: [],
       plans: [],
