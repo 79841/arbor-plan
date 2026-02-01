@@ -6,6 +6,7 @@ import {
   slugify,
   readYamlFile,
   writeYamlFile,
+  toPhysicalFeaturePath,
   type Mappings,
   type LinkedPlan,
   type TargetType,
@@ -103,9 +104,11 @@ export async function linkPlan(
   // Build destination path
   let destDir: string;
   switch (input.targetType) {
-    case 'feature':
-      destDir = path.join(arborRoot, 'features', input.targetPath, 'plans');
+    case 'feature': {
+      const physicalPath = toPhysicalFeaturePath(input.targetPath);
+      destDir = path.join(arborRoot, 'features', physicalPath, 'plans');
       break;
+    }
     case 'config':
       destDir = path.join(arborRoot, 'config', input.targetPath, 'plans');
       break;
@@ -115,9 +118,11 @@ export async function linkPlan(
     case 'refactor':
     case 'test':
     case 'security':
-    case 'performance':
-      destDir = path.join(arborRoot, 'features', input.targetPath, input.targetType, 'plans');
+    case 'performance': {
+      const physicalPath = toPhysicalFeaturePath(input.targetPath);
+      destDir = path.join(arborRoot, 'features', physicalPath, input.targetType, 'plans');
       break;
+    }
     default:
       return {
         success: false,
