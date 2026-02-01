@@ -102,6 +102,11 @@ export function createVisualizerServer(config: ServerConfig) {
         name,
       });
 
+      // Broadcast plan-linked event on success for immediate UI update
+      if (result.success) {
+        broadcastPlanLinked(planId, targetPath, result.linkedPlan);
+      }
+
       res.json(result);
     } catch (error) {
       console.error('Failed to link plan:', error);
@@ -267,6 +272,23 @@ export function createVisualizerServer(config: ServerConfig) {
     } catch (e) {
       console.error('Failed to broadcast tree update:', e);
     }
+  };
+
+  // Broadcast plan-linked event for optimized partial updates
+  const broadcastPlanLinked = (
+    planId: string,
+    targetPath: string,
+    linkedPlan?: { id: string; source: string; local: string; name: string }
+  ) => {
+    const message = JSON.stringify({
+      type: 'plan-linked',
+      data: { planId, targetPath, linkedPlan },
+    });
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    });
   };
 
   // Watch for file changes in .arbor directory
