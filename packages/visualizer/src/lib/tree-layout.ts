@@ -1,5 +1,5 @@
 import type { Node, Edge, MarkerType } from '@xyflow/react';
-import type { TreeNode, NodeConnection } from '@arbor-plan/core';
+import type { TreeNode, NodeConnection, Plan, Task } from '@arbor-plan/core';
 
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 60;
@@ -15,6 +15,28 @@ interface LayoutNode extends Node {
 
 export interface TreeToFlowOptions {
   connections?: NodeConnection[];
+}
+
+/**
+ * Plan을 TreeNode로 변환하면서 plan_ref로 연결된 Task들을 자식으로 포함
+ */
+function planToTreeNode(plan: Plan, tasks: Task[]): TreeNode {
+  // plan_ref가 이 plan의 id인 task들을 찾아서 자식으로 추가
+  const linkedTasks = tasks.filter((t) => t.plan_ref === plan.id);
+
+  const planNode: TreeNode = {
+    type: 'plan' as const,
+    id: plan.id,
+    name: plan.name,
+    path: plan.path,
+  };
+
+  // 연결된 Task들을 Plan의 tasks로 추가
+  if (linkedTasks.length > 0) {
+    planNode.tasks = linkedTasks;
+  }
+
+  return planNode;
 }
 
 export function treeToFlow(
@@ -49,21 +71,17 @@ export function treeToFlow(
       children.push(...node.children);
     }
 
-    // Add plans, tasks, bugs, docs as leaf nodes
+    // Plan 노드를 자식으로 추가 (plan_ref로 연결된 task들을 포함)
     if (node.plans) {
-      children.push(
-        ...node.plans.map((p) => ({
-          type: 'plan' as const,
-          id: p.id,
-          name: p.name,
-          path: p.path,
-        }))
-      );
+      const allTasks = node.tasks || [];
+      children.push(...node.plans.map((p) => planToTreeNode(p, allTasks)));
     }
 
+    // plan_ref가 없는 Task만 Feature의 직접 자식으로 추가
     if (node.tasks) {
+      const orphanTasks = node.tasks.filter((t) => !t.plan_ref);
       children.push(
-        ...node.tasks.map((t) => ({
+        ...orphanTasks.map((t) => ({
           type: 'task' as const,
           id: t.id,
           name: t.name,
