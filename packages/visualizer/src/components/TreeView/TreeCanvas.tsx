@@ -11,11 +11,13 @@ import '@xyflow/react/dist/style.css';
 
 import { TreeNode } from './TreeNode';
 import { treeToFlow } from '../../lib/tree-layout';
+import { useConnections } from '../../hooks/useConnections';
+import { useViewMode } from '../../contexts/ViewModeContext';
 import type { TreeData, TreeNode as TreeNodeType, TaskStatus } from '@arbor-plan/core';
 
 const nodeTypes = {
   treeNode: TreeNode,
-};
+} as const;
 
 interface TreeCanvasProps {
   treeData: TreeData | null;
@@ -28,12 +30,15 @@ export function TreeCanvas({
   statusFilter,
   onNodeSelect,
 }: TreeCanvasProps) {
+  const { connections, refresh: refreshConnections } = useConnections();
+  const { mode, pendingConnection, cancelConnection } = useViewMode();
+
   const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
     if (!treeData) {
       return { nodes: [], edges: [] };
     }
-    return treeToFlow(treeData.root);
-  }, [treeData]);
+    return treeToFlow(treeData.root, { connections });
+  }, [treeData, connections]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -43,6 +48,33 @@ export function TreeCanvas({
     setNodes(initialNodes);
     setEdges(initialEdges);
   }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  // Refresh connections when a connection is made (via TreeNode)
+  useEffect(() => {
+    // Listen for custom event from TreeNode when connection is made
+    const handleConnectionMade = () => {
+      refreshConnections();
+    };
+
+    window.addEventListener('arbor-connection-made', handleConnectionMade);
+    return () => {
+      window.removeEventListener('arbor-connection-made', handleConnectionMade);
+    };
+  }, [refreshConnections]);
+
+  // Handle ESC key to cancel pending connection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && pendingConnection) {
+        cancelConnection();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [pendingConnection, cancelConnection]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {

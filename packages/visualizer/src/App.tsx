@@ -4,7 +4,9 @@ import { TreeCanvas } from './components/TreeView/TreeCanvas';
 import { DetailPanel } from './components/DetailPanel/DetailPanel';
 import { StatusFilter } from './components/StatusFilter/StatusFilter';
 import { UnlinkedList } from './components/UnlinkedPlans/UnlinkedList';
+import { ModeToggle } from './components/ModeToggle';
 import { DragDropProvider } from './contexts/DragDropContext';
+import { ViewModeProvider } from './contexts/ViewModeContext';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSelectedNode } from './hooks/useSelectedNode';
 import type { TreeNode, TaskStatus } from '@arbor-plan/core';
@@ -16,23 +18,28 @@ function App() {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
 
   return (
-    <DragDropProvider>
-      <div className="flex h-screen bg-gray-50">
-        {/* Sidebar */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-200">
-            <h1 className="text-xl font-semibold text-gray-800">Arbor</h1>
-            <div className="flex items-center mt-2 text-sm">
-              <span
-                className={`w-2 h-2 rounded-full mr-2 ${
-                  connected ? 'bg-green-500' : 'bg-red-500'
-                }`}
-              />
-              <span className="text-gray-500">
-                {connected ? 'Connected' : 'Disconnected'}
-              </span>
+    <ViewModeProvider>
+      <DragDropProvider>
+        <div className="flex h-screen bg-gray-50">
+          {/* Sidebar */}
+          <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+            <div className="p-4 border-b border-gray-200">
+              <h1 className="text-xl font-semibold text-gray-800">Arbor</h1>
+              <div className="flex items-center mt-2 text-sm">
+                <span
+                  className={`w-2 h-2 rounded-full mr-2 ${
+                    connected ? 'bg-green-500' : 'bg-red-500'
+                  }`}
+                />
+                <span className="text-gray-500">
+                  {connected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
             </div>
-          </div>
+
+            <div className="p-4 border-b border-gray-200">
+              <ModeToggle />
+            </div>
 
           <div className="p-4 border-b border-gray-200">
             <StatusFilter
@@ -74,6 +81,7 @@ function App() {
         </div>
       </div>
     </DragDropProvider>
+    </ViewModeProvider>
   );
 }
 

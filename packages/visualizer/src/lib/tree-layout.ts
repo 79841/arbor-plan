@@ -1,5 +1,5 @@
-import type { Node, Edge } from '@xyflow/react';
-import type { TreeNode } from '@arbor-plan/core';
+import type { Node, Edge, MarkerType } from '@xyflow/react';
+import type { TreeNode, NodeConnection } from '@arbor-plan/core';
 
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 60;
@@ -13,8 +13,13 @@ interface LayoutNode extends Node {
   };
 }
 
+export interface TreeToFlowOptions {
+  connections?: NodeConnection[];
+}
+
 export function treeToFlow(
-  root: TreeNode | null
+  root: TreeNode | null,
+  options: TreeToFlowOptions = {}
 ): { nodes: LayoutNode[]; edges: Edge[] } {
   if (!root) {
     return { nodes: [], edges: [] };
@@ -63,7 +68,7 @@ export function treeToFlow(
           id: t.id,
           name: t.name,
           path: '',
-          status: t.status,
+          status: t.status as any, // TaskStatus (pending, blocked) differs from NodeStatus
         }))
       );
     }
@@ -142,6 +147,34 @@ export function treeToFlow(
   }
 
   traverse(root, 0, 0, null);
+
+  // Add custom connection edges if provided
+  if (options.connections) {
+    for (const conn of options.connections) {
+      // Only add edge if both source and target nodes exist
+      const sourceExists = nodes.some((n) => n.id === conn.source_id);
+      const targetExists = nodes.some((n) => n.id === conn.target_id);
+
+      if (sourceExists && targetExists) {
+        edges.push({
+          id: `conn-${conn.id}`,
+          source: conn.source_id,
+          target: conn.target_id,
+          type: 'smoothstep',
+          animated: true,
+          style: { stroke: '#8b5cf6', strokeWidth: 2 },
+          markerEnd: {
+            type: 'arrowclosed' as MarkerType,
+            color: '#8b5cf6',
+          },
+          data: {
+            isCustomConnection: true,
+            connectionId: conn.id,
+          },
+        });
+      }
+    }
+  }
 
   return { nodes, edges };
 }
