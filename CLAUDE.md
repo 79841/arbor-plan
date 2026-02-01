@@ -17,6 +17,15 @@ Claude Code Plan 파일을 트리 구조로 시각화하는 도구
 - `.claude/docs/ARCHITECTURE.md` - 아키텍처 요약 (빠른 참조)
 - `.claude/docs/API.md` - MCP Tools API 레퍼런스
 
+## 작업 프로세스
+
+**반드시 `.claude/rules/WORKFLOW.md` 규칙을 따를 것:**
+
+1. **Git Flow** - develop에서 feature/* 브랜치 생성
+2. **TDD** - 테스트 먼저 작성 (Red → Green → Refactor)
+3. **검증** - 커밋 전 `pnpm test && pnpm lint && pnpm tsc --noEmit`
+4. **PR** - 작업 완료 시 develop으로 PR, 리뷰 후 머지
+
 ## 패키지 구조
 
 ```
