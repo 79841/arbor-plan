@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "arbor": {
+      "command": "node",
+      "args": ["./packages/mcp/dist/index.js"],
+      "env": {
+        "ARBOR_ROOT": ".arbor"
+      }
+    }
+  }
+}
