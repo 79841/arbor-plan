@@ -19,13 +19,16 @@ export interface AutoLinkerConfig {
   claudePlansPath?: string;
 }
 
-export type AutoLinkerEvent = 'plan-linked' | 'plan-unlinked' | 'error';
+export type AutoLinkerEvent = 'plan-linked' | 'plan-unlinked' | 'scan-complete' | 'source-updated' | 'error';
 
 export interface AutoLinkerEventData {
   source: string;
   dest?: string;
   plan?: LinkedPlan;
   error?: Error;
+  newUnlinked?: number;
+  sourceUpdated?: number;
+  total?: number;
 }
 
 export class AutoLinker {
@@ -45,7 +48,101 @@ export class AutoLinker {
 
     this.watcher.on('plan-detected', (filePath) => this.handleNewPlan(filePath));
 
+    // Perform initial scan before starting the watcher
+    await this.initialScan();
+
     await this.watcher.start();
+  }
+
+  /**
+   * Performs initial scan of existing plan files.
+   * - Scans all .md files in ~/.claude/plans/
+   * - Checks if each file is already tracked in mappings.yaml
+   * - Adds untracked files to unlinked array
+   * - Updates source_exists flag for all linked plans
+   */
+  async initialScan(): Promise<{
+    newUnlinked: number;
+    sourceUpdated: number;
+    total: number;
+  }> {
+    const result = { newUnlinked: 0, sourceUpdated: 0, total: 0 };
+
+    try {
+      // 1. Get all existing plan files
+      const existingFiles = await this.watcher.scanExisting();
+      result.total = existingFiles.length;
+
+      // 2. Load current mappings
+      const mappingsPath = path.join(this.config.arborRoot, 'mappings.yaml');
+      if (!(await fs.pathExists(mappingsPath))) {
+        return result; // Arbor not initialized
+      }
+
+      const mappings = await this.loadMappings(mappingsPath);
+
+      // 3. Build a Set of already tracked source paths
+      const trackedSources = new Set<string>();
+
+      // Add linked sources
+      for (const linked of mappings.linked) {
+        trackedSources.add(linked.source);
+      }
+
+      // Add unlinked sources
+      for (const unlinked of mappings.unlinked) {
+        trackedSources.add(unlinked.source);
+      }
+
+      // 4. Find untracked files and add to unlinked
+      for (const filePath of existingFiles) {
+        if (!trackedSources.has(filePath)) {
+          await this.addToUnlinked(filePath);
+          result.newUnlinked++;
+        }
+      }
+
+      // 5. Update source_exists flag for all linked plans
+      let hasUpdates = false;
+      for (const linked of mappings.linked) {
+        // Skip plans created directly via arbor_create_plan
+        if (linked.source === 'arbor_created') {
+          continue;
+        }
+
+        const sourceExists = await fs.pathExists(linked.source);
+        if (linked.source_exists !== sourceExists) {
+          linked.source_exists = sourceExists;
+          hasUpdates = true;
+          result.sourceUpdated++;
+
+          this.onUpdate?.('source-updated', {
+            source: linked.source,
+            plan: linked,
+          });
+        }
+      }
+
+      // 6. Save updated mappings if needed
+      if (hasUpdates) {
+        await writeYamlFile(mappingsPath, mappings);
+      }
+
+      this.onUpdate?.('scan-complete', {
+        source: this.watcher.getWatchPath(),
+        newUnlinked: result.newUnlinked,
+        sourceUpdated: result.sourceUpdated,
+        total: result.total,
+      });
+
+      return result;
+    } catch (error) {
+      this.onUpdate?.('error', {
+        source: this.watcher.getWatchPath(),
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {

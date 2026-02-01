@@ -7,5 +7,5 @@ export default defineConfig({
   clean: false,
   sourcemap: true,
   outDir: 'dist/server',
-  external: ['express', 'ws', 'chokidar'],
+  external: ['express', 'ws', 'chokidar', '@arbor-plan/core', '@arbor-plan/mcp'],
 });

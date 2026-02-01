@@ -3,6 +3,7 @@ export * from './create-feature.js';
 export * from './create-config.js';
 export * from './create-infra.js';
 export * from './create-subnode.js';
+export * from './create-plan.js';
 export * from './create-task.js';
 export * from './create-bug.js';
 export * from './create-doc.js';

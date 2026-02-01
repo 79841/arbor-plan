@@ -2,12 +2,58 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
-import { TreeParser } from '@arbor-plan/core';
+import { readFile } from 'fs/promises';
+import { existsSync } from 'fs';
+import {
+  TreeParser,
+  generatePlanId,
+  getDateTimeString,
+  readYamlFile,
+  writeYamlFile,
+  type Mappings,
+} from '@arbor-plan/core';
+import { linkPlan } from '@arbor-plan/mcp';
 import chokidar from 'chokidar';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Helper functions for unlinked plan management
+async function addUnlinkedPlan(arborRoot: string, filePath: string): Promise<void> {
+  const mappingsPath = path.join(arborRoot, 'mappings.yaml');
+  if (!existsSync(mappingsPath)) return;
+
+  const mappings = await readYamlFile<Mappings>(mappingsPath);
+
+  // 이미 linked 또는 unlinked에 있는지 확인
+  const isLinked = mappings.linked.some((p) => p.source === filePath);
+  const isUnlinked = mappings.unlinked.some((p) => p.source === filePath);
+
+  if (!isLinked && !isUnlinked) {
+    const content = await readFile(filePath, 'utf-8');
+    const preview = content.slice(0, 100).replace(/\n/g, ' ');
+
+    mappings.unlinked.push({
+      id: generatePlanId(),
+      source: filePath,
+      detected_at: getDateTimeString(),
+      preview,
+    });
+
+    await writeYamlFile(mappingsPath, mappings);
+  }
+}
+
+async function removeUnlinkedPlan(arborRoot: string, filePath: string): Promise<void> {
+  const mappingsPath = path.join(arborRoot, 'mappings.yaml');
+  if (!existsSync(mappingsPath)) return;
+
+  const mappings = await readYamlFile<Mappings>(mappingsPath);
+  mappings.unlinked = mappings.unlinked.filter((p) => p.source !== filePath);
+  await writeYamlFile(mappingsPath, mappings);
+}
 
 export interface ServerConfig {
   port: number;
@@ -22,6 +68,7 @@ export function createVisualizerServer(config: ServerConfig) {
   // Serve static files
   const clientDir = path.resolve(__dirname, '../client');
   app.use(express.static(clientDir));
+  app.use(express.json());
 
   // API routes
   app.get('/api/tree', async (_req, res) => {
@@ -31,6 +78,35 @@ export function createVisualizerServer(config: ServerConfig) {
       res.json(tree);
     } catch (error) {
       res.status(500).json({ error: 'Failed to parse tree' });
+    }
+  });
+
+  // Link plan API
+  app.post('/api/link-plan', async (req, res) => {
+    try {
+      const { planId, targetType, targetPath, name } = req.body;
+
+      if (!planId || !targetType || !targetPath) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: 'Missing required fields' },
+        });
+      }
+
+      const result = await linkPlan(config.arborRoot, {
+        planId,
+        targetType,
+        targetPath,
+        name,
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to link plan:', error);
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Failed to link plan' },
+      });
     }
   });
 
@@ -64,18 +140,11 @@ export function createVisualizerServer(config: ServerConfig) {
     });
   });
 
-  // Watch for file changes
-  const watcher = chokidar.watch(config.arborRoot, {
-    ignored: /(^|[\/\\])\../,
-    persistent: true,
-    ignoreInitial: true,
-  });
-
-  watcher.on('all', async () => {
+  // Broadcast helper
+  const broadcastTreeUpdate = async () => {
     try {
       const parser = new TreeParser(config.arborRoot);
       const tree = await parser.parse();
-
       const message = JSON.stringify({ type: 'tree-update', data: tree });
       clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -85,16 +154,49 @@ export function createVisualizerServer(config: ServerConfig) {
     } catch (e) {
       console.error('Failed to broadcast tree update:', e);
     }
+  };
+
+  // Watch for file changes in .arbor directory
+  const watcher = chokidar.watch(config.arborRoot, {
+    ignored: /(^|[\/\\])\../,
+    persistent: true,
+    ignoreInitial: true,
+  });
+
+  watcher.on('all', broadcastTreeUpdate);
+
+  // Watch for Claude plan files in ~/.claude/plans/
+  const claudePlansDir = path.join(os.homedir(), '.claude', 'plans');
+  const claudePlansWatcher = chokidar.watch(claudePlansDir, {
+    ignored: /(^|[\/\\])\../,
+    persistent: true,
+    ignoreInitial: false, // 초기 파일도 스캔
+  });
+
+  claudePlansWatcher.on('add', async (filePath) => {
+    if (!filePath.endsWith('.md')) return;
+    console.log(`[Claude Plans] Detected: ${filePath}`);
+    await addUnlinkedPlan(config.arborRoot, filePath);
+    await broadcastTreeUpdate();
+  });
+
+  claudePlansWatcher.on('unlink', async (filePath) => {
+    if (!filePath.endsWith('.md')) return;
+    console.log(`[Claude Plans] Removed: ${filePath}`);
+    await removeUnlinkedPlan(config.arborRoot, filePath);
+    await broadcastTreeUpdate();
   });
 
   return {
     start: () => {
       server.listen(config.port, () => {
         console.log(`Arbor Visualizer running at http://localhost:${config.port}`);
+        console.log(`Watching Claude plans at: ${claudePlansDir}`);
       });
     },
     stop: () => {
       watcher.close();
+      claudePlansWatcher.close();
       wss.close();
       server.close();
     },

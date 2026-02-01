@@ -60,4 +60,17 @@ export class ClaudePlansWatcher extends EventEmitter {
   getWatchPath(): string {
     return this.claudePlansPath;
   }
+
+  /**
+   * Scans the claude plans directory and returns all existing .md files.
+   * This does NOT emit any events - it's for initial scan purposes only.
+   */
+  async scanExisting(): Promise<string[]> {
+    await fs.ensureDir(this.claudePlansPath);
+
+    const files = await fs.readdir(this.claudePlansPath);
+    return files
+      .filter((f) => f.endsWith('.md') && !f.startsWith('.'))
+      .map((f) => path.join(this.claudePlansPath, f));
+  }
 }
