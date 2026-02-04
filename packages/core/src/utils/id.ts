@@ -23,3 +23,7 @@ export function generateDocId(): string {
 export function generateContextId(): string {
   return generateId('ctx');
 }
+
+export function generateConnectionId(): string {
+  return generateId('conn');
+}

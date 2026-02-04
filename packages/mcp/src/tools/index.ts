@@ -11,3 +11,4 @@ export * from './set-pending-context.js';
 export * from './link-plan.js';
 export * from './get-structure.js';
 export * from './list-tasks.js';
+export * from './rebuild-relationships.js';

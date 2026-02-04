@@ -25,6 +25,7 @@ import {
   linkPlan,
   getStructure,
   listTasks,
+  rebuildRelationships,
 } from './tools/index.js';
 import { AutoLinker } from './linker/auto-linker.js';
 
@@ -375,6 +376,35 @@ export async function createMcpServer() {
             },
           },
         },
+        {
+          name: 'arbor_rebuild_relationships',
+          description: '.arbor 폴더 스캔 및 관계 재정리 (mappings.yaml 재구축, plan_ref 검증)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              rebuildConnections: {
+                type: 'boolean',
+                description: 'connections.yaml 재구축 여부',
+                default: false,
+              },
+              fixInvalidPlanRefs: {
+                type: 'boolean',
+                description: '존재하지 않는 plan을 참조하는 task의 plan_ref 제거',
+                default: false,
+              },
+              fixMissingPlanIds: {
+                type: 'boolean',
+                description: 'arbor_plan_id가 없는 plan에 ID 추가',
+                default: false,
+              },
+              dryRun: {
+                type: 'boolean',
+                description: '미리보기 모드 (파일 수정 없이 이슈만 보고)',
+                default: true,
+              },
+            },
+          },
+        },
       ],
     };
   });
@@ -477,6 +507,11 @@ export async function createMcpServer() {
 
         case 'arbor_list_tasks': {
           const result = await listTasks(arborRoot, args as any);
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+
+        case 'arbor_rebuild_relationships': {
+          const result = await rebuildRelationships(arborRoot, args as any);
           return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
 
