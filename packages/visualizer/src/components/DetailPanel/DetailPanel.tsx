@@ -105,8 +105,8 @@ export function DetailPanel({ node, onClose }: DetailPanelProps) {
           </div>
         )}
 
-        {/* Tasks */}
-        {node.tasks && node.tasks.length > 0 && (
+        {/* Tasks - Plan 노드에서만 표시 */}
+        {node.type === 'plan' && node.tasks && node.tasks.length > 0 && (
           <div className="mb-4">
             <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">
               Tasks ({node.tasks.length})

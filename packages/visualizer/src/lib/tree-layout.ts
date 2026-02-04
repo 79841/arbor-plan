@@ -77,11 +77,10 @@ export function treeToFlow(
       children.push(...node.plans.map((p) => planToTreeNode(p, allTasks)));
     }
 
-    // plan_ref가 없는 Task만 Feature의 직접 자식으로 추가
-    if (node.tasks) {
-      const orphanTasks = node.tasks.filter((t) => !t.plan_ref);
+    // Task는 Plan 노드에서만 자식으로 추가
+    if (node.type === 'plan' && node.tasks) {
       children.push(
-        ...orphanTasks.map((t) => ({
+        ...node.tasks.map((t) => ({
           type: 'task' as const,
           id: t.id,
           name: t.name,
