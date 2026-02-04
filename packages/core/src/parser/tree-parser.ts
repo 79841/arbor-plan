@@ -55,13 +55,13 @@ export class TreeParser {
     return {
       root,
       mappings: {
-        linked: mappings.linked.map((l) => ({
+        linked: (mappings.linked || []).map((l) => ({
           id: l.id,
           source: l.source,
           local: l.local,
           name: l.name,
         })),
-        unlinked: mappings.unlinked.map((u) => ({
+        unlinked: (mappings.unlinked || []).map((u) => ({
           id: u.id,
           source: u.source,
           preview: u.preview,
@@ -298,11 +298,15 @@ export class TreeParser {
       const filePath = path.join(dir, entry.name);
       const content = await fs.readFile(filePath, 'utf-8');
 
+      // Parse frontmatter to get arbor_plan_id
+      const { frontmatter } = await readMarkdownFile<{ arbor_plan_id?: string }>(filePath);
+      const planId = frontmatter.arbor_plan_id || path.basename(entry.name, '.md');
+
       // Parse tasks from plan content
       const parseResult = parsePlanTasks(content);
 
       plans.push({
-        id: path.basename(entry.name, '.md'),
+        id: planId,
         name: path.basename(entry.name, '.md'),
         path: filePath,
         content,

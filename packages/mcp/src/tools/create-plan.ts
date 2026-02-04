@@ -98,8 +98,9 @@ export async function createPlan(
     };
   }
 
-  // 6. Write pure markdown (no frontmatter) - matches Plan Mode format
-  await fs.writeFile(planPath, input.content, 'utf-8');
+  // 6. Write markdown with arbor_plan_id frontmatter for Task linking
+  const contentWithId = `---\narbor_plan_id: ${id}\n---\n\n${input.content}`;
+  await fs.writeFile(planPath, contentWithId, 'utf-8');
 
   // 7. Update mappings.yaml
   const linkedAt = getDateTimeString();

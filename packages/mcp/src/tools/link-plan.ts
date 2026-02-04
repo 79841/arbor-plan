@@ -161,12 +161,19 @@ export async function linkPlan(
   const fileName = `${slugify(planName)}.md`;
   const destPath = path.join(destDir, fileName);
 
-  // Copy file
-  await fs.copy(unlinkedPlan.source, destPath);
+  // Generate plan ID first
+  const planId = generatePlanId();
+
+  // Copy file and add arbor_plan_id frontmatter
+  const sourceContent = await fs.readFile(unlinkedPlan.source, 'utf-8');
+  const contentWithId = sourceContent.startsWith('---')
+    ? sourceContent.replace(/^---\n/, `---\narbor_plan_id: ${planId}\n`)
+    : `---\narbor_plan_id: ${planId}\n---\n\n${sourceContent}`;
+  await fs.writeFile(destPath, contentWithId, 'utf-8');
 
   // Create linked plan entry
   const linkedPlan: LinkedPlan = {
-    id: generatePlanId(),
+    id: planId,
     source: unlinkedPlan.source,
     local: path.relative(arborRoot, destPath),
     target_type: input.targetType,
